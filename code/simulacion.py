@@ -142,7 +142,7 @@ def in_defectos(t,k,C_med,matriz_sana):
     nombre = 064-80-f1-2-10 significa 64pix 80Mc filtro9p t=2 k=1.0
     Cmed no es un parametro independiente, se calcula a partir de 80Mc y 64pix'''
 
-def histogram_name(N_pix,nct,filtro,t=0,k=0):
+def histogram_name(N_pix,nct,filtro=1,t=0,k=0):
     N_pix = str(int(N_pix))
     if len(N_pix)<3:
         N_pix = '0'+N_pix
@@ -195,24 +195,25 @@ def sorteo_montecarlo(x,y,xe,ye):
 
 
 
-def montecarlo_trapecio(x,y,xe,ye):
+def montecarlo_trapecio(x,y,xe,ye,error_lineal=False):
     integral_inicial = trapecio(x,y)
     integral = np.array([])
-    for i in range(1000):
-        x_mc,y_mc=sorteo_montecarlo(x,y,xe,ye)
-        integral = np.append(integral,trapecio(x_mc,y_mc)) #Da igual que valores de xe,ye tomememos. De hecho creo que lo voy a borrar
-    integral = np.sort(integral)
 
-    '''for i in range(len(integral)-1):
-        if integral[i]<integral_inicial<integral[i+1]:
-            pos_inf = i
-            pos_sup = i+1
-    delta =  int(0.3413447460685429*len(integral))
-    
-    sigma_plus = integral[pos_sup+delta] - integral[pos_sup]
-    sigma_minus = integral[pos_inf] - integral[pos_inf-delta] 
-    sigma = 0.5*(sigma_minus + sigma_plus)      '''
-    sigma = np.std(integral)
+    if(error_lineal==False):
+            for i in range(1000):
+                x_mc,y_mc=sorteo_montecarlo(x,y,xe,ye)
+                integral = np.append(integral,trapecio(x_mc,y_mc)) #Da igual que valores de xe,ye tomememos. De hecho creo que lo voy a borrar
+            integral = np.sort(integral)
+            sigma = np.std(integral)
+    if(error_lineal==True):
+        sigma2=0
+        for i in range(len(x)-1):
+            delta_x = x[i+1]-x[i]
+            delta_y = 0.5*(y[i+1]-y[i])
+            sigma_x = np.sqrt(xe[i]**2+xe[i+1]**2)
+            sigma_y = 0.5*np.sqrt(ye[i]**2+ye[i+1]**2)
+            sigma2 = sigma2 + (delta_y*sigma_x)**2 + (delta_x*sigma_y)**2
+        sigma = np.sqrt(sigma2)
     return integral_inicial,sigma
 
 
@@ -256,13 +257,13 @@ def curvaroc(N_pix,nct,t,k,dibujar=False): #de momento el filtro es f1
     #se podria plantear la opcion de devolver un .cv con los datos
     return x,y,xe,ye
 
-def areacontraste(N_pix,nct,t,dibujar=False): #k no es input, es una variable de output
+def areacontraste(N_pix,nct,t,dibujar=False,lineal_error=False): #k no es input, es una variable de output
     k_list=[0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10]
     integral_list=[]
     error_list=[]
     for k in k_list:
         x,y,xe,ye = curvaroc(N_pix,nct,t,k)
-        integral,error = montecarlo_trapecio(x,y,xe,ye)
+        integral,error = montecarlo_trapecio(x,y,xe,ye,lineal_error)
         integral_list.append(integral)
         error_list.append(error)
     x = np.array(k_list)
@@ -273,25 +274,38 @@ def areacontraste(N_pix,nct,t,dibujar=False): #k no es input, es una variable de
     return x,y,xe,ye
     
 def ajuste_ac(x,y):
+    #0. Variable auxiliar para decidir si el ajuste se ha podido realizar
+    fitted = False
     #1. Transformar los datos para realizar un ajuste lineal.
     x_fit,y_fit = np.zeros(len(x)),np.zeros(len(x))
     for i in range(len(x)):
         if 0.51<y[i]<0.99: #No consideros los puntos en los extremos saturados
+            fitted = True
             x_fit[i] = x[i] #x no cambia
             y_fit[i] = np.log(1/(2*y[i]-1)-1) #funcion de ajuste invertida -- falta considerar la transformacion de los errores
-    x_fit = x_fit[x_fit!=0] #Elimino los elementos no nulos
-    y_fit = y_fit[y_fit!=0]
-    x_min = np.min(x_fit)
-    x_max = np.max(x_fit)
-    curvalineal = root.TGraph(len(x_fit),x_fit,y_fit)
-    linearfit = root.TF1("linearfit","1++x",x_min,x_max) # a+b*x
-    curvalineal.Fit(linearfit,"C")
-    linearfit = curvalineal.GetFunction("linearfit")
-    a = linearfit.GetParameter(0)
-    b = linearfit.GetParameter(1)
+    if fitted == True:
+        x_fit = x_fit[x_fit!=0] #Elimino los elementos no nulos
+        y_fit = y_fit[y_fit!=0]
+        x_min = np.min(x_fit)
+        x_max = np.max(x_fit)
+        curvalineal = root.TGraph(len(x_fit),x_fit,y_fit)
+        linearfit = root.TF1("linearfit","1++x",x_min,x_max) # a+b*x
+        curvalineal.Fit(linearfit,"C")
+        linearfit = curvalineal.GetFunction("linearfit")
+        a = linearfit.GetParameter(0)
+        b = linearfit.GetParameter(1)
+        return a,b, fitted
+    if fitted == False:
+        x0 = 0
+        m = 0
+        for i in range(len(x)-1):
+            if y[i+1]-y[i]>0.2:
+                x0 = x[i]
+                m = (y[i+1]-y[i])/(x[i+1]-x[i])
+            return x0, m, fitted
     
 
-    return a,b
+    
     
   
 def dibujarroc(x,y,xe,ye,color): #los argumentos son los valores de fvn y ffn; color es un elemento kcolor
@@ -317,7 +331,7 @@ def dibujarAC(x,y,xe,ye,color): #los argumentos son los valores de fvn y ffn; co
     ajuste = root.TGraph(10000)
     x_fit = np.zeros(10000)
     y_fit = np.zeros(10000)
-    a,b = ajuste_ac(x,y)
+    a,b,fitted = ajuste_ac(x,y)
     for i in range(10000):
         x_fit[i] = i*10/10000
         y_fit[i] = 0.5*(1+1/(1+np.exp(a+b*x_fit[i])))
@@ -341,29 +355,33 @@ def contrastedetalle(Npix,nct):
     sigma_list = np.zeros(len(t_list))
     for i in range(len(t_list)):
         x,y,xe,ye = areacontraste(Npix,nct,t_list[i],False)
-        a,b=ajuste_ac(x,y)
-        aroc = 0.75 #Esto puede ser modificado a 0.8 -- 0.9
-        if -0.01<b<0.01: break
-        k = (1/b) * (-a + np.log(1/(2*aroc-1)-1))
-        #implemento el montecarlo directamente
-        montecarlo=np.zeros(1000)
-        '''for j in range(1000):
-            a_mc = np.random.normal(a,asigma)
-            b_mc = np.random.normal(b,bsigma)
-            if abs(b_mc)>0.01:
-                k_mc = (1/b_mc)* (-a_mc + np.log(1/(2*aroc-1)-1))
-            montecarlo[j]=k_mc'''
-        for j in range(1000):
-            ymc = np.zeros(len(x))
-            for l in range(len(x)):
-                ymc[l]=np.random.normal(y[l],ye[l])
-            amc,bmc=ajuste_ac(x,ymc)
-            if abs(bmc)>0.01:
-                kmc = (1/bmc)*(-amc + np.log(1/(2*aroc-1)-1))
-            montecarlo[j] = kmc
-        k_list[i] = k
-        sigma_list[i] = np.std(montecarlo)
-    return t_list**2,k_list,sigma_list
+        a,b,fitted=ajuste_ac(x,y)
+        if fitted == True:
+            aroc = 0.80 #Esto puede ser modificado a 0.8 -- 0.9
+            if -0.01<b<0.01: break
+            #k = (1/b) * (-a + np.log(1/(2*aroc-1)-1))
+            k = (1/b) * (-a - np.log(1/(2*aroc-1)-1))
+            #implemento el montecarlo directamente
+            montecarlo=np.zeros(1000)
+    
+            for j in range(1000):
+                ymc = np.zeros(len(x))
+                for l in range(len(x)):
+                    ymc[l]=np.random.normal(y[l],ye[l])
+                amc,bmc,fitted=ajuste_ac(x,ymc)
+                if abs(bmc)>0.01:
+                    kmc = (1/bmc)*(-amc + np.log(1/(2*aroc-1)-1))
+                montecarlo[j] = kmc
+            k_list[i] = k
+            sigma_list[i] = np.std(montecarlo)
+        if fitted == False:
+            x0 = a
+            m = b
+            k = (0.8-0.5)/m + x0
+            k_list[i] = k
+            sigma_list[i] = 0.0
+
+    return t_list,k_list,sigma_list
 
 
 def dibujarCD(x,y,xe,ye,color,nct): #los argumentos son los valores de fvn y ffn; color es un elemento kcolor
