@@ -39,8 +39,9 @@ def filtro(matriz_cuentas,field_of_view,N_pix):
             matriz_reducida[i,j]=matriz_filtrada[filas_ini + i,col_ini + j]
     return matriz_reducida
 
-def filtro_9p(matriz_cuentas,N_pix):
+def filtro_9p(matriz_cuentas,N_pix,filtro=1):
     matriz_filtrada = np.zeros((N_pix,N_pix))
+    
     for i in range(4,N_pix-4):
         for j in range(12,N_pix-12):
             P1=matriz_cuentas[i-1,j-1]
@@ -52,7 +53,11 @@ def filtro_9p(matriz_cuentas,N_pix):
             P7=matriz_cuentas[i+1,j-1]
             P8=matriz_cuentas[i+1,j]
             P9=matriz_cuentas[i+1,j+1]
-            matriz_filtrada[i,j]=(P1*1 + P2*2 + P3*1 +2*P4 + 4*P5 + 2*P6 + 1*P7 + 2*P8 + 1*P9)/(16)
+            if(filtro==1):
+                matriz_filtrada[i,j]=(P1*1 + P2*2 + P3*1 +2*P4 + 4*P5 + 2*P6 + 1*P7 + 2*P8 + 1*P9)/(16)
+            if(filtro==0):
+                matriz_filtrada[i,j]=P5
+    
     "Aqui extraigo la submatriz para continuar con el analisis"
     start_row = 4
     size_row = N_pix-8
@@ -71,18 +76,21 @@ def uniformidad_integral(matriz_cuentas):
     unif_integral = 100*(max - min)/(max + min)
     return unif_integral
 
-def analisis(N_pix, C_med,filas_eliminadas, columnas_eliminadas):
+def analisis(N_pix, C_med,filas_eliminadas, columnas_eliminadas,filtro=1):
     fov = field_of_view(N_pix, filas_eliminadas, columnas_eliminadas)
     matriz_cuentas = matriz_uniform(N_pix,C_med,fov)
-    matriz_filtrada = filtro_9p(matriz_cuentas,N_pix)
+    matriz_filtrada = filtro_9p(matriz_cuentas,N_pix,filtro)
     unif_integral = uniformidad_integral(matriz_filtrada)
+    unif_integral = uniformidad_integral(matriz_cuentas)
     return unif_integral
+    
+    
 
 #Generar distribucion Histograma sin defecto
-def dist(N_pix,C_med,num_cuentas,filas_eliminadas,columnas_eliminadas):
+def dist(N_pix,C_med,num_cuentas,filas_eliminadas,columnas_eliminadas,filtro=1):
     d = np.zeros(num_cuentas)
     for i in range(num_cuentas):
-        d[i] = analisis(N_pix, C_med,filas_eliminadas, columnas_eliminadas)
+        d[i] = analisis(N_pix, C_med,filas_eliminadas, columnas_eliminadas,filtro)
     distribucion = np.sort(d)
     return distribucion
 
@@ -98,17 +106,17 @@ def matriz_defectos(t,k,N_pix,C_med,fov):
 
     return matriz
 
-def analisis_defectos(t,k,N_pix, C_med,filas_eliminadas, columnas_eliminadas):
+def analisis_defectos(t,k,N_pix, C_med,filas_eliminadas, columnas_eliminadas,filtro=1):
     fov = field_of_view(N_pix, filas_eliminadas, columnas_eliminadas)
     matriz_cuentas = matriz_defectos(t,k,N_pix,C_med,fov)
-    matriz_filtrada = filtro_9p(matriz_cuentas,N_pix)
+    matriz_filtrada = filtro_9p(matriz_cuentas,N_pix,filtro)
     unif_integral = uniformidad_integral(matriz_filtrada)
     return unif_integral
 
-def dist_defectos(t,k,N_pix,C_med,num_cuentas,filas_eliminadas,columnas_eliminadas):
+def dist_defectos(t,k,N_pix,C_med,num_cuentas,filas_eliminadas,columnas_eliminadas,filtro=1):
     d = np.zeros(num_cuentas)
     for i in range(num_cuentas):
-        d[i] = analisis_defectos(t,k,N_pix,C_med,filas_eliminadas,columnas_eliminadas)
+        d[i] = analisis_defectos(t,k,N_pix,C_med,filas_eliminadas,columnas_eliminadas,filtro)
     distribucion = np.sort(d)
     return distribucion
 
@@ -236,11 +244,11 @@ Output: parametros a,b del ajuste a la curva logistica
 5. dibujarAC(x,y,xe,ye) ---- sirven para dibujar y guardar en un archivo las curvas roc y area-contraste
 '''
 
-def curvaroc(N_pix,nct,t,k,dibujar=False): #de momento el filtro es f1
+def curvaroc(N_pix,nct,t,k,dibujar=False,filtro=1): #de momento el filtro es f1
 
-    file_path = "./histogramas/64x64/"+str(nct)+"mc/"
-    name_sana = histogram_name(N_pix,nct,1)
-    name_defec = histogram_name(N_pix,nct,1,t,k)
+    file_path = "./histogramas/64x64/"
+    name_sana = histogram_name(N_pix,nct,filtro)
+    name_defec = histogram_name(N_pix,nct,filtro,t,k)
     file_sana = root.TFile(file_path+name_sana)
     file_defec = root.TFile(file_path+name_defec)
     hist_sana = file_sana.Get(name_sana)
@@ -360,7 +368,7 @@ def contrastedetalle(Npix,nct):
             aroc = 0.80 #Esto puede ser modificado a 0.8 -- 0.9
             if -0.01<b<0.01: break
             #k = (1/b) * (-a + np.log(1/(2*aroc-1)-1))
-            k = (1/b) * (-a - np.log(1/(2*aroc-1)-1))
+            k = (1/b) * (-a + np.log(1/(2*aroc-1)-1))
             #implemento el montecarlo directamente
             montecarlo=np.zeros(1000)
     
