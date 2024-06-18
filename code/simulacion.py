@@ -26,18 +26,6 @@ def matriz_uniform(N_pix, C_med, field_of_view):
             matriz_cuentas[i,j] = np.random.normal(C_med, np.sqrt(C_med))
     return matriz_cuentas
 
-def filtro(matriz_cuentas,field_of_view,N_pix):
-    matriz_filtrada = scipy.ndimage.uniform_filter(matriz_cuentas)
-    filas_ini = int(N_pix - field_of_view[0]+1)
-    filas_fin = int(field_of_view[0]-1)
-    
-    col_ini = int(N_pix - field_of_view[1]+1)
-    col_fin =int(field_of_view[1]-1)
-    matriz_reducida = np.zeros([filas_fin-filas_ini,col_fin-col_ini])
-    for i in range(filas_fin-filas_ini):
-        for j in range(col_fin-col_ini):
-            matriz_reducida[i,j]=matriz_filtrada[filas_ini + i,col_ini + j]
-    return matriz_reducida
 
 def filtro_9p(matriz_cuentas,N_pix,filtro=1):
     matriz_filtrada = np.zeros((N_pix,N_pix))
@@ -84,7 +72,7 @@ def analisis(N_pix, C_med,filas_eliminadas, columnas_eliminadas,filtro=1):
     unif_integral = uniformidad_integral(matriz_cuentas)
     return unif_integral
     
-    
+
 
 #Generar distribucion Histograma sin defecto
 def dist(N_pix,C_med,num_cuentas,filas_eliminadas,columnas_eliminadas,filtro=1):
@@ -187,7 +175,7 @@ def trapecio(x,y):
     integral = 0
     for i in range(len(x)-1):
         delta_x = x[i+1]-x[i]
-        integral = integral + delta_x*y[i] + 0.5*(y[i+1]-y[i])*delta_x
+        integral = integral + 0.5*(y[i+1]+y[i])*delta_x
     return abs(integral)
 
 def sorteo_montecarlo(x,y,xe,ye):
@@ -370,9 +358,9 @@ def contrastedetalle(Npix,nct):
             #k = (1/b) * (-a + np.log(1/(2*aroc-1)-1))
             k = (1/b) * (-a + np.log(1/(2*aroc-1)-1))
             #implemento el montecarlo directamente
-            montecarlo=np.zeros(1000)
+            montecarlo=np.zeros(2000)
     
-            for j in range(1000):
+            for j in range(2000):
                 ymc = np.zeros(len(x))
                 for l in range(len(x)):
                     ymc[l]=np.random.normal(y[l],ye[l])
